@@ -63,16 +63,16 @@ done
 
 
 
-# Deploy container image to Cloud Run (Org Policy & Auth Compliant)
+# Deploy container image to Cloud Run (Enabling direct web browser access with OAuth PKCE)
 echo "Deploying microservice container image to Cloud Run..."
 gcloud run deploy "${SERVICE_NAME}" \
     --image="${IMAGE_URI}" \
     --region="${REGION}" \
-    --ingress=internal-and-cloud-load-balancing \
-    --no-allow-unauthenticated \
+    --allow-unauthenticated \
     --port=8080 \
     --set-env-vars="ENV=production,LOG_LEVEL=INFO,GEMINI_FLASH_MODEL=gemini-2.5-flash,GEMINI_PRO_MODEL=gemini-2.5-pro" \
     --quiet
+
 
 
 
