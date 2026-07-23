@@ -47,12 +47,13 @@ echo "Deploying microservice from source code to Cloud Run (Org Policy Ingress C
 gcloud run deploy "${SERVICE_NAME}" \
     --source . \
     --region="${REGION}" \
-    --platform=managed \
     --ingress=internal-and-cloud-load-balancing \
     --no-allow-unauthenticated \
     --port=8080 \
     --set-env-vars="ENV=production,LOG_LEVEL=INFO,GEMINI_FLASH_MODEL=gemini-2.5-flash,GEMINI_PRO_MODEL=gemini-2.5-pro" \
     --quiet
+
+
 
 
 
