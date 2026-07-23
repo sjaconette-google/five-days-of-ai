@@ -46,10 +46,157 @@ async def startup_event() -> None:
     logger.info("gtd_ef_agent_service_booted", environment=os.getenv("ENV", "production"))
 
 
+from fastapi.responses import JSONResponse, HTMLResponse
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_web_chat_interface() -> str:
+    """Serves the interactive web chat interface for testing GTD & Workload Focus Agent turns."""
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GTD & Workload Focus Agent</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f4f6f9; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .chat-card { max-width: 900px; margin: 30px auto; border-radius: 12px; border: none; box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+    .chat-header { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: white; border-top-left-radius: 12px; border-top-right-radius: 12px; padding: 20px; }
+    .chat-body { height: 480px; overflow-y: auto; padding: 20px; background-color: #ffffff; }
+    .msg-bubble { max-width: 80%; padding: 12px 16px; border-radius: 18px; margin-bottom: 12px; line-height: 1.5; font-size: 0.95rem; }
+    .msg-user { background-color: #e3f2fd; color: #0d47a1; margin-left: auto; border-bottom-right-radius: 4px; }
+    .msg-agent { background-color: #f1f3f4; color: #202124; margin-right: auto; border-bottom-left-radius: 4px; }
+    .agent-badge { font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; display: inline-block; margin-bottom: 6px; }
+    .badge-router { background-color: #e8eaed; color: #3c4043; }
+    .badge-triage { background-color: #feefc3; color: #b06000; }
+    .badge-planning { background-color: #ceedd6; color: #0d652d; }
+    .badge-execution { background-color: #fce8e6; color: #c5221f; }
+    .chip-btn { border-radius: 20px; font-size: 0.85rem; padding: 6px 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card chat-card">
+      <div class="chat-header d-flex justify-content-between align-items-center">
+        <div>
+          <h4 class="mb-1">⚡ GTD & Workload Focus Agent</h4>
+          <small class="opacity-75">Multi-Agent ADK Runtime • Gemini 2.5 Flash & Pro</small>
+        </div>
+        <div class="text-end">
+          <span class="badge bg-success mb-1">ONLINE</span>
+          <br><small class="opacity-75">User: <strong id="current-user">sjaconette</strong></small>
+        </div>
+      </div>
+      <div class="p-3 bg-light border-bottom">
+        <div class="row align-items-center">
+          <div class="col-md-7">
+            <label class="form-label font-weight-bold mb-1">📊 Energy & Fatigue Score Budget (1 - 10): <span id="fatigue-val" class="badge bg-primary">5</span></label>
+            <input type="range" class="form-range" id="fatigue-slider" min="1" max="10" value="5" oninput="document.getElementById('fatigue-val').innerText = this.value">
+          </div>
+          <div class="col-md-5 text-end">
+            <button class="btn btn-outline-primary chip-btn me-1" onclick="sendQuickPrompt('Please plan my focus schedule for today')">📅 Plan Schedule</button>
+            <button class="btn btn-outline-warning chip-btn" onclick="sendQuickPrompt('Please help me triage my unread inbox')">📥 Triage Inbox</button>
+          </div>
+        </div>
+      </div>
+      <div class="chat-body" id="chat-window">
+        <div class="msg-bubble msg-agent">
+          <span class="agent-badge badge-router">ADKRouter</span>
+          <div>Hello! I am your GTD and Workload Focus Assistant. How can I help you optimize your workload focus today?</div>
+        </div>
+      </div>
+      <div class="card-footer p-3 bg-white border-top">
+        <div class="input-group">
+          <input type="text" id="user-input" class="form-control" placeholder="Ask to plan schedule, triage emails, or execute mutations..." onkeypress="if(event.key==='Enter') sendMessage()">
+          <button class="btn btn-primary px-4" onclick="sendMessage()">Send Turn 🚀</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let turnIndex = 0;
+    const history = [];
+
+    async function sendMessage() {
+      const inputEl = document.getElementById('user-input');
+      const prompt = inputEl.value.trim();
+      if (!prompt) return;
+
+      const fatigue = document.getElementById('fatigue-slider').value;
+      const fullPrompt = prompt.includes('fatigue') ? prompt : `${prompt} (fatigue score ${fatigue})`;
+      
+      appendMessage('user', 'User', prompt);
+      inputEl.value = '';
+      turnIndex++;
+
+      try {
+        const res = await fetch('/api/v1/turn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer mock_bearer_token' },
+          body: JSON.stringify({ user_id: 'sjaconette', prompt: fullPrompt, turn_index: turnIndex, history: history })
+        });
+        const data = await res.json();
+        if (data.status === 'SUCCESS') {
+          renderAgentResult(data.result);
+        } else {
+          appendMessage('agent', 'Error', 'Failed to process turn request.');
+        }
+      } catch (err) {
+        appendMessage('agent', 'Error', 'Network error calling /api/v1/turn: ' + err);
+      }
+    }
+
+    function sendQuickPrompt(promptText) {
+      document.getElementById('user-input').value = promptText;
+      sendMessage();
+    }
+
+    function appendMessage(type, sender, text, badgeClass = 'badge-router') {
+      const chatWin = document.getElementById('chat-window');
+      const div = document.createElement('div');
+      div.className = `msg-bubble msg-${type}`;
+      div.innerHTML = `<span class="agent-badge ${badgeClass}">${sender}</span><div>${text}</div>`;
+      chatWin.appendChild(div);
+      chatWin.scrollTop = chatWin.scrollHeight;
+    }
+
+    function renderAgentResult(result) {
+      const agent = result.agent || 'ADKRouter';
+      let badgeClass = 'badge-router';
+      if (agent === 'TriageAgent') badgeClass = 'badge-triage';
+      if (agent === 'PlanningAgent') badgeClass = 'badge-planning';
+      if (agent === 'ExecutionAgent') badgeClass = 'badge-execution';
+
+      let formattedText = '';
+      if (result.commitment_plan_draft) {
+        const plan = result.commitment_plan_draft;
+        formattedText = `<strong>Daily Focus Plan Draft Generated:</strong><br>` +
+          `• Total Duration: ${plan.total_estimated_duration_minutes}m / ${plan.available_capacity_minutes}m available<br>` +
+          `• P0 Frog Task: ${plan.frog_task_id}<br>` +
+          `• Support Actions: ${plan.support_task_ids.join(', ')}<br>` +
+          `<em>${plan.alignment_notes}</em>`;
+      } else if (result.proposed_gtd_decisions) {
+        formattedText = `<strong>Inbox Triage Analyzed (${result.inbox_messages.length} messages):</strong><br>` +
+          result.proposed_gtd_decisions.map(d => `• Msg ${d.message_id}: <strong>${d.action_type}</strong> (${d.reasoning})`).join('<br>');
+      } else if (result.response) {
+        formattedText = result.response;
+      } else {
+        formattedText = JSON.stringify(result, null, 2);
+      }
+
+      appendMessage('agent', agent, formattedText, badgeClass);
+    }
+  </script>
+</body>
+</html>"""
+
+
 @app.get("/health")
 async def health_check() -> Dict[str, Any]:
     """Health check endpoint for Cloud Run container probing."""
     return {"status": "HEALTHY", "timestamp": time.time(), "version": "1.0.0"}
+
 
 
 class TurnRequest(BaseModel):
