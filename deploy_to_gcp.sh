@@ -42,36 +42,16 @@ gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${COMPUTE_SA}" \
     --role="roles/storage.admin" --quiet 2>/dev/null || true
 
-# Build container image using Cloud Build and poll until completion
-echo "Submitting container image build to Cloud Build..."
-BUILD_ID=$(gcloud builds submit --tag "${IMAGE_URI}" --async --format="value(id)" .)
-echo "Submitted Cloud Build ID: ${BUILD_ID}"
-
-echo "Waiting for Cloud Build compilation to finish..."
-while true; do
-    STATUS=$(gcloud builds describe "${BUILD_ID}" --format="value(status)" 2>/dev/null || echo "PENDING")
-    echo "  Cloud Build Status: ${STATUS}..."
-    if [ "${STATUS}" = "SUCCESS" ]; then
-        echo "Container image compiled successfully!"
-        break
-    elif [ "${STATUS}" = "FAILURE" ] || [ "${STATUS}" = "CANCELLED" ] || [ "${STATUS}" = "TIMEOUT" ]; then
-        echo "Cloud Build failed with status: ${STATUS}"
-        exit 1
-    fi
-    sleep 5
-done
-
-
-
-# Deploy container image to Cloud Run (Enabling direct web browser access with OAuth PKCE)
-echo "Deploying microservice container image to Cloud Run..."
+# Deploy containerized microservice directly from source to Cloud Run
+echo "Deploying microservice from source code to Cloud Run..."
 gcloud run deploy "${SERVICE_NAME}" \
-    --image="${IMAGE_URI}" \
+    --source . \
     --region="${REGION}" \
     --allow-unauthenticated \
     --port=8080 \
     --set-env-vars="ENV=production,LOG_LEVEL=INFO,GEMINI_FLASH_MODEL=gemini-2.5-flash,GEMINI_PRO_MODEL=gemini-2.5-pro" \
     --quiet
+
 
 
 
