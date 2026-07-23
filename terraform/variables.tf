@@ -1,7 +1,7 @@
 variable "project_id" {
   description = "GCP Project ID"
   type        = string
-  default     = "gtd-ef-agent-gcp-project"
+  default     = "google.com:sjaconette"
 }
 
 variable "region" {
@@ -13,5 +13,6 @@ variable "region" {
 variable "container_image" {
   description = "Artifact Registry container image URI for Cloud Run"
   type        = string
-  default     = "us-central1-docker.pkg.dev/gtd-ef-agent-gcp-project/gtd-agent-repo/gtd-ef-agent:latest"
+  default     = "us-central1-docker.pkg.dev/google.com:sjaconette/gtd-agent-repo/gtd-ef-agent:latest"
 }
+
