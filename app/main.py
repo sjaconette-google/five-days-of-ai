@@ -3,7 +3,7 @@
 import os
 import time
 from typing import Dict, Any, Optional, List
-from fastapi import FastAPI, Header, HTTPException, Depends, Request
+from fastapi import FastAPI, Header, HTTPException, Depends, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -21,7 +21,12 @@ from app.models.domain import (
 from app.agents.router import ADKRouter
 from app.agents.execution import ExecutionAgent
 from app.services.auth_service import AuthService
-from app.services.db_service import init_db, get_tenant_db_session
+from app.services.db_service import (
+    init_db,
+    get_tenant_db_session,
+    async_save_memory_turn,
+    async_save_evening_reflection,
+)
 from app.telemetry.logging import configure_logging, logger
 
 # Initialize logging
@@ -35,14 +40,14 @@ app = FastAPI(
 
 
 @app.on_event("startup")
-def startup_event() -> None:
+async def startup_event() -> None:
     """Application boot initialization."""
     init_db()
     logger.info("gtd_ef_agent_service_booted", environment=os.getenv("ENV", "production"))
 
 
 @app.get("/health")
-def health_check() -> Dict[str, Any]:
+async def health_check() -> Dict[str, Any]:
     """Health check endpoint for Cloud Run container probing."""
     return {"status": "HEALTHY", "timestamp": time.time(), "version": "1.0.0"}
 
@@ -61,7 +66,7 @@ class ApprovalRequest(BaseModel):
 
 
 @app.post("/auth/login")
-def auth_login() -> Dict[str, Any]:
+async def auth_login() -> Dict[str, Any]:
     """Initiates Google Account OAuth 2.0 PKCE authentication flow."""
     pkce = AuthService.generate_pkce_challenge()
     return {
@@ -72,8 +77,12 @@ def auth_login() -> Dict[str, Any]:
 
 
 @app.post("/api/v1/turn")
-def execute_turn(req: TurnRequest, authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
-    """ADK Router turn entrypoint."""
+async def execute_turn(
+    req: TurnRequest,
+    background_tasks: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+) -> Dict[str, Any]:
+    """ADK Router turn entrypoint with async background task memory persistence."""
     bearer_token = authorization.replace("Bearer ", "") if authorization else "mock_bearer_token"
     context = InvocationContext(
         user_id=req.user_id,
@@ -91,11 +100,21 @@ def execute_turn(req: TurnRequest, authorization: Optional[str] = Header(None)) 
         history=req.history,
         user_settings=user_settings,
     )
+
+    # Dispatch non-blocking async background task for memory persistence
+    background_tasks.add_task(
+        async_save_memory_turn,
+        user_id=req.user_id,
+        turn_index=req.turn_index,
+        prompt=req.prompt,
+        routed_workflow=str(result.get("routed_workflow", "UNKNOWN")),
+    )
+
     return {"status": "SUCCESS", "turn_index": req.turn_index, "result": result}
 
 
 @app.post("/api/v1/approve/gate")
-def issue_approval_gate_token(req: ApprovalRequest) -> Dict[str, Any]:
+async def issue_approval_gate_token(req: ApprovalRequest) -> Dict[str, Any]:
     """Human-in-the-Loop Confirmation Gate: Issues a cryptographically signed approval token."""
     token = AuthService.issue_human_approval_token(
         user_id=req.user_id,
@@ -107,7 +126,7 @@ def issue_approval_gate_token(req: ApprovalRequest) -> Dict[str, Any]:
 
 
 @app.post("/api/v1/execute/mutation")
-def execute_approved_mutation(
+async def execute_approved_mutation(
     approval_token: HumanApprovalToken,
     action_type: str,
     payload: Dict[str, Any],
@@ -140,16 +159,20 @@ def execute_approved_mutation(
 
 
 @app.post("/api/v1/shutdown")
-def evening_shutdown(reflection: EveningReflection) -> Dict[str, Any]:
-    """Evening shutdown routine recording metrics into PostgreSQL persistence."""
-    with get_tenant_db_session(reflection.user_id) as session:
-        # Relational ledger log entry recorded
-        logger.info(
-            "evening_shutdown_logged",
-            user_id=reflection.user_id,
-            fatigue=reflection.fatigue_score,
-            velocity=reflection.velocity_score,
-        )
+async def evening_shutdown(
+    reflection: EveningReflection,
+    background_tasks: BackgroundTasks,
+) -> Dict[str, Any]:
+    """Evening shutdown routine asynchronously persisting metrics into PostgreSQL persistence."""
+    # Dispatch async memory background task
+    background_tasks.add_task(async_save_evening_reflection, user_id=reflection.user_id, reflection=reflection)
+
+    logger.info(
+        "evening_shutdown_logged",
+        user_id=reflection.user_id,
+        fatigue=reflection.fatigue_score,
+        velocity=reflection.velocity_score,
+    )
     return {
         "status": "SHUTDOWN_COMPLETE",
         "date": reflection.date,
@@ -157,6 +180,7 @@ def evening_shutdown(reflection: EveningReflection) -> Dict[str, Any]:
         "velocity_score": reflection.velocity_score,
         "message": "Session context archived. Context sliding window cleared for morning.",
     }
+
 
 
 

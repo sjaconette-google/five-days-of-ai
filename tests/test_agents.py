@@ -69,3 +69,24 @@ def test_human_confirmation_gate_security():
     valid_token = AuthService.issue_human_approval_token(user_id, "TRIAGE_MUTATION", contract.model_dump())
     res = execution_agent.execute_triage_mutation(valid_token, contract, user_id=user_id)
     assert res["status"] == "SUCCESS"
+
+
+def test_async_memory_operations_and_background_tasks():
+    import asyncio
+    try:
+        from fastapi import BackgroundTasks
+        bg_tasks = BackgroundTasks()
+        bg_tasks.add_task(async_save_memory_turn, "u_async", 1, "test prompt", "DAILY_PLANNING")
+    except ImportError:
+        bg_tasks = None
+
+    from app.services.db_service import async_save_memory_turn, async_save_evening_reflection
+    from app.models.domain import EveningReflection
+
+    reflection = EveningReflection(user_id="u_async", date="2026-07-23", completed_tasks_count=3, velocity_score=8, fatigue_score=4)
+
+    # Execute async tasks
+    asyncio.run(async_save_memory_turn("u_async", 1, "test prompt", "DAILY_PLANNING"))
+    asyncio.run(async_save_evening_reflection("u_async", reflection))
+
+

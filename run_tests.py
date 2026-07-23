@@ -24,6 +24,7 @@ from tests.test_agents import (
     test_adk_router_planning_delegation,
     test_adk_history_compaction,
     test_human_confirmation_gate_security,
+    test_async_memory_operations_and_background_tasks,
 )
 from tests.test_eval_harness import test_rubric_evaluation_harness_score_pass
 
@@ -48,8 +49,10 @@ def main():
         ("test_adk_router_planning_delegation", test_adk_router_planning_delegation),
         ("test_adk_history_compaction", test_adk_history_compaction),
         ("test_human_confirmation_gate_security", test_human_confirmation_gate_security),
+        ("test_async_memory_operations_and_background_tasks", test_async_memory_operations_and_background_tasks),
         ("test_rubric_evaluation_harness_score_pass", test_rubric_evaluation_harness_score_pass),
     ]
+
 
     passed = 0
     failed = 0
