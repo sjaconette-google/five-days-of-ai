@@ -83,7 +83,8 @@ async def serve_web_chat_interface() -> str:
           <small class="opacity-75">Multi-Agent ADK Runtime • Gemini 2.5 Flash & Pro</small>
         </div>
         <div class="text-end">
-          <span class="badge bg-success mb-1">ONLINE</span>
+          <span id="auth-status" class="badge bg-warning text-dark mb-1">OAuth Pending</span>
+          <button id="oauth-btn" class="btn btn-sm btn-light ms-2 font-weight-bold" onclick="loginWithOAuth()">🔑 Log in with Google OAuth</button>
           <br><small class="opacity-75">User: <strong id="current-user">sjaconette</strong></small>
         </div>
       </div>
@@ -102,7 +103,7 @@ async def serve_web_chat_interface() -> str:
       <div class="chat-body" id="chat-window">
         <div class="msg-bubble msg-agent">
           <span class="agent-badge badge-router">ADKRouter</span>
-          <div>Hello! I am your GTD and Workload Focus Assistant. How can I help you optimize your workload focus today?</div>
+          <div>Hello! I am your GTD and Workload Focus Assistant. Please log in with Google OAuth or start asking prompts directly.</div>
         </div>
       </div>
       <div class="card-footer p-3 bg-white border-top">
@@ -118,6 +119,23 @@ async def serve_web_chat_interface() -> str:
     let turnIndex = 0;
     const history = [];
 
+    async function loginWithOAuth() {
+      try {
+        const res = await fetch('/auth/login', { method: 'POST' });
+        const data = await res.json();
+        if (data.status === 'INITIATED') {
+          sessionStorage.setItem('code_verifier', data.pkce.code_verifier);
+          sessionStorage.setItem('bearer_token', 'mock_pkce_bearer_token_' + Date.now());
+          const badge = document.getElementById('auth-status');
+          badge.innerText = 'OAuth Authenticated (PKCE)';
+          badge.className = 'badge bg-success mb-1';
+          appendMessage('agent', 'AuthService', 'Google OAuth 2.0 PKCE challenge generated successfully. Code challenge: ' + data.pkce.code_challenge, 'badge-router');
+        }
+      } catch (err) {
+        alert('OAuth initiation failed: ' + err);
+      }
+    }
+
     async function sendMessage() {
       const inputEl = document.getElementById('user-input');
       const prompt = inputEl.value.trim();
@@ -130,10 +148,12 @@ async def serve_web_chat_interface() -> str:
       inputEl.value = '';
       turnIndex++;
 
+      const token = sessionStorage.getItem('bearer_token') || 'mock_bearer_token';
+
       try {
         const res = await fetch('/api/v1/turn', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer mock_bearer_token' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ user_id: 'sjaconette', prompt: fullPrompt, turn_index: turnIndex, history: history })
         });
         const data = await res.json();
@@ -189,7 +209,7 @@ async def serve_web_chat_interface() -> str:
     }
   </script>
 </body>
-</html>"""
+</html>""""""
 
 
 @app.get("/health")

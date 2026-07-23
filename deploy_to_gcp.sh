@@ -42,16 +42,21 @@ gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${COMPUTE_SA}" \
     --role="roles/storage.admin" --quiet 2>/dev/null || true
 
-# Deploy containerized microservice directly from source to Cloud Run
-echo "Deploying microservice from source code to Cloud Run (Org Policy Ingress Compliant)..."
+# Build and Push container image using Cloud Build
+echo "Building container image via Cloud Build..."
+gcloud builds submit --tag "${IMAGE_URI}" . --quiet
+
+# Deploy container image to Cloud Run (Org Policy & Auth Compliant)
+echo "Deploying microservice container image to Cloud Run..."
 gcloud run deploy "${SERVICE_NAME}" \
-    --source . \
+    --image="${IMAGE_URI}" \
     --region="${REGION}" \
     --ingress=internal-and-cloud-load-balancing \
     --no-allow-unauthenticated \
     --port=8080 \
     --set-env-vars="ENV=production,LOG_LEVEL=INFO,GEMINI_FLASH_MODEL=gemini-2.5-flash,GEMINI_PRO_MODEL=gemini-2.5-pro" \
     --quiet
+
 
 
 
