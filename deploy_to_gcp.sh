@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
+
 PROJECT_ID="sjaconette-experiment"
 REGION="us-central1"
 SERVICE_NAME="gtd-ef-agent-service"
 REPO_NAME="gtd-agent-repo"
 IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${SERVICE_NAME}:latest"
+
 
 
 echo "============================================================"
@@ -29,20 +33,26 @@ gcloud artifacts repositories create "${REPO_NAME}" \
     --location="${REGION}" \
     --description="Docker repository for GTD Workload Focus Agent" 2>/dev/null || true
 
-# Build and Push container image using Cloud Builds (no local Docker daemon dependency required)
-echo "Building and pushing container image via Cloud Build..."
-gcloud builds submit --tag "${IMAGE_URI}" . --quiet
+# Ensure Compute Service Account has Storage Admin permissions for source staging
+PROJECT_NUMBER=$(gcloud projects describe "${PROJECT_ID}" --format="value(projectNumber)")
+COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
-# Deploy containerized microservice to Cloud Run
-echo "Deploying containerized microservice to Cloud Run..."
+echo "Ensuring Service Account (${COMPUTE_SA}) Storage permissions..."
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+    --member="serviceAccount:${COMPUTE_SA}" \
+    --role="roles/storage.admin" --quiet 2>/dev/null || true
+
+# Deploy containerized microservice directly from source to Cloud Run
+echo "Deploying microservice from source code to Cloud Run..."
 gcloud run deploy "${SERVICE_NAME}" \
-    --image="${IMAGE_URI}" \
+    --source . \
     --region="${REGION}" \
     --platform=managed \
     --allow-unauthenticated \
     --port=8080 \
     --set-env-vars="ENV=production,LOG_LEVEL=INFO,GEMINI_FLASH_MODEL=gemini-2.5-flash,GEMINI_PRO_MODEL=gemini-2.5-pro" \
     --quiet
+
 
 # Fetch deployed service endpoint URL
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --region="${REGION}" --format="value(status.url)")
