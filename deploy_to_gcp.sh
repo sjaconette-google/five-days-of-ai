@@ -42,9 +42,13 @@ gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${COMPUTE_SA}" \
     --role="roles/storage.admin" --quiet 2>/dev/null || true
 
-# Build and Push container image using Cloud Build
-echo "Building container image via Cloud Build..."
-gcloud builds submit --tag "${IMAGE_URI}" . --quiet
+# Build and Push container image using Cloud Build (--async avoids VPC-SC log streaming error)
+echo "Submitting container image build to Cloud Build..."
+gcloud builds submit --tag "${IMAGE_URI}" --async . --quiet
+
+echo "Waiting 20 seconds for Cloud Build image compilation..."
+sleep 20
+
 
 # Deploy container image to Cloud Run (Org Policy & Auth Compliant)
 echo "Deploying microservice container image to Cloud Run..."
