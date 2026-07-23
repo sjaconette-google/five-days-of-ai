@@ -52,9 +52,10 @@ class AuthService:
         issued_at: float = time.time()
         expires_at: float = issued_at + ttl_seconds
 
-        # Compute payload SHA-256 hash
-        payload_str: str = str(sorted(payload_dict.items()))
+        import json
+        payload_str: str = json.dumps(payload_dict, sort_keys=True)
         payload_hash: str = hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
+
 
         # Compute HMAC-SHA256 signature
         sig_base: str = f"{token_id}:{user_id}:{action_type}:{payload_hash}:{expires_at}"
@@ -84,8 +85,10 @@ class AuthService:
             logger.warning("human_approval_token_mismatch", token_id=token.token_id)
             return False
 
-        payload_str: str = str(sorted(payload_dict.items()))
+        import json
+        payload_str: str = json.dumps(payload_dict, sort_keys=True)
         expected_hash: str = hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
+
         if token.payload_hash != expected_hash:
             logger.warning("human_approval_payload_tampered", token_id=token.token_id)
             return False
