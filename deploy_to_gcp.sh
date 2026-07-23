@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
-PROJECT_ID="google.com:sjaconette"
+PROJECT_ID="sjaconette-experiment"
 REGION="us-central1"
 SERVICE_NAME="gtd-ef-agent-service"
 REPO_NAME="gtd-agent-repo"
 IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${SERVICE_NAME}:latest"
+
 
 echo "============================================================"
 echo " Deploying GTD & Workload Focus Agent to GCP Project: ${PROJECT_ID}"
