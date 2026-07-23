@@ -42,12 +42,25 @@ gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${COMPUTE_SA}" \
     --role="roles/storage.admin" --quiet 2>/dev/null || true
 
-# Build and Push container image using Cloud Build (--async avoids VPC-SC log streaming error)
+# Build container image using Cloud Build and poll until completion
 echo "Submitting container image build to Cloud Build..."
-gcloud builds submit --tag "${IMAGE_URI}" --async . --quiet
+BUILD_ID=$(gcloud builds submit --tag "${IMAGE_URI}" --async --format="value(id)" .)
+echo "Submitted Cloud Build ID: ${BUILD_ID}"
 
-echo "Waiting 20 seconds for Cloud Build image compilation..."
-sleep 20
+echo "Waiting for Cloud Build compilation to finish..."
+while true; do
+    STATUS=$(gcloud builds describe "${BUILD_ID}" --format="value(status)" 2>/dev/null || echo "PENDING")
+    echo "  Cloud Build Status: ${STATUS}..."
+    if [ "${STATUS}" = "SUCCESS" ]; then
+        echo "Container image compiled successfully!"
+        break
+    elif [ "${STATUS}" = "FAILURE" ] || [ "${STATUS}" = "CANCELLED" ] || [ "${STATUS}" = "TIMEOUT" ]; then
+        echo "Cloud Build failed with status: ${STATUS}"
+        exit 1
+    fi
+    sleep 5
+done
+
 
 
 # Deploy container image to Cloud Run (Org Policy & Auth Compliant)
